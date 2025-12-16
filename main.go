@@ -106,14 +106,15 @@ func main() {
 
 	if *contribs {
 		// GitHub contribution graph-style glyphs and colors.
-		chars = []rune{' ', '⬝', '⯀', '◼', '■', '■', '■', '■', '■', '■'}
+		// Use varied glyphs for different intensity levels (10 total to match original behavior)
+		chars = []rune{' ', '⬝', '⬝', '⯀', '⯀', '◼', '◼', '■', '■', '■'}
 		// GitHub green palette: empty, low (#9be9a8), medium (#40c463), high (#30a14e), very high (#216e39)
 		styles = []tcell.Style{
-			tcell.StyleDefault.Foreground(tcell.ColorBlack),
-			tcell.StyleDefault.Foreground(tcell.NewRGBColor(155, 233, 168)), // #9be9a8
-			tcell.StyleDefault.Foreground(tcell.NewRGBColor(64, 196, 99)),   // #40c463
-			tcell.StyleDefault.Foreground(tcell.NewRGBColor(48, 161, 78)),   // #30a14e
-			tcell.StyleDefault.Foreground(tcell.NewRGBColor(33, 110, 57)),   // #216e39
+			tcell.StyleDefault.Foreground(tcell.ColorBlack),                 // index 0 (not used by style selection)
+			tcell.StyleDefault.Foreground(tcell.NewRGBColor(155, 233, 168)), // #9be9a8 (low)
+			tcell.StyleDefault.Foreground(tcell.NewRGBColor(64, 196, 99)),   // #40c463 (medium)
+			tcell.StyleDefault.Foreground(tcell.NewRGBColor(48, 161, 78)),   // #30a14e (high)
+			tcell.StyleDefault.Foreground(tcell.NewRGBColor(33, 110, 57)),   // #216e39 (very high)
 		}
 	} else {
 		// Original fire-style glyphs and colors.
