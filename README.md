@@ -37,8 +37,15 @@ Run the extension with:
 gh yule-log
 ```
 
-- Your terminal will fill with a flickering, colored fire effect.
-- Press any key to exit.
+![](images/gh-yule-log-vanilla.gif)
+
+Or try the experimental `--contribs` flag to see a Yule log themed around your GitHub contributions:
+
+```bash
+gh yule-log --contribs
+```
+
+![](images/gh-yule-log-contribs.gif)
  
 ## Inspiration
 
