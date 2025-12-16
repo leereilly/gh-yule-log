@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"math/rand"
 	"os"
@@ -74,6 +75,10 @@ func buildGitTickerText(maxCommits int) (string, string, bool) {
 }
 
 func main() {
+	// Parse command-line flags.
+	contribs := flag.Bool("contribs", false, "Use GitHub contribution graph-style visualization")
+	flag.Parse()
+
 	rand.Seed(time.Now().UnixNano())
 
 	s, err := tcell.NewScreen()
@@ -95,15 +100,33 @@ func main() {
 
 	size := width * height
 	buffer := make([]int, size+width+1)
-	chars := []rune{' ', '.', ':', '^', '*', 'x', 's', 'S', '#', '$'}
 
-	// Colors: dark red -> bright yellow/white.
-	styles := []tcell.Style{
-		tcell.StyleDefault.Foreground(tcell.ColorBlack),
-		tcell.StyleDefault.Foreground(tcell.ColorMaroon),
-		tcell.StyleDefault.Foreground(tcell.ColorRed),
-		tcell.StyleDefault.Foreground(tcell.ColorDarkOrange),
-		tcell.StyleDefault.Foreground(tcell.ColorYellow).Bold(true),
+	var chars []rune
+	var styles []tcell.Style
+
+	if *contribs {
+		// GitHub contribution graph-style glyphs and colors.
+		// Use varied glyphs for different intensity levels (10 total to match original behavior)
+		chars = []rune{' ', '⬝', '⬝', '⯀', '⯀', '◼', '◼', '■', '■', '■'}
+		// GitHub green palette: empty, low (#9be9a8), medium (#40c463), high (#30a14e), very high (#216e39)
+		styles = []tcell.Style{
+			tcell.StyleDefault.Foreground(tcell.ColorBlack),                 // index 0 (not used by style selection)
+			tcell.StyleDefault.Foreground(tcell.NewRGBColor(155, 233, 168)), // #9be9a8 (low)
+			tcell.StyleDefault.Foreground(tcell.NewRGBColor(64, 196, 99)),   // #40c463 (medium)
+			tcell.StyleDefault.Foreground(tcell.NewRGBColor(48, 161, 78)),   // #30a14e (high)
+			tcell.StyleDefault.Foreground(tcell.NewRGBColor(33, 110, 57)),   // #216e39 (very high)
+		}
+	} else {
+		// Original fire-style glyphs and colors.
+		chars = []rune{' ', '.', ':', '^', '*', 'x', 's', 'S', '#', '$'}
+		// Colors: dark red -> bright yellow/white.
+		styles = []tcell.Style{
+			tcell.StyleDefault.Foreground(tcell.ColorBlack),
+			tcell.StyleDefault.Foreground(tcell.ColorMaroon),
+			tcell.StyleDefault.Foreground(tcell.ColorRed),
+			tcell.StyleDefault.Foreground(tcell.ColorDarkOrange),
+			tcell.StyleDefault.Foreground(tcell.ColorYellow).Bold(true),
+		}
 	}
 
 	msgText, metaText, haveTicker := buildGitTickerText(20)

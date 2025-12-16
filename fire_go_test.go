@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"os"
 	"strings"
 	"testing"
 )
@@ -46,6 +48,49 @@ func TestParseGitLogToTicker_MultipleCommits(t *testing.T) {
 		if !contains(meta, want) {
 			t.Fatalf("meta ticker %q does not contain %q", meta, want)
 		}
+	}
+}
+
+func TestFlagParsing(t *testing.T) {
+	// Save original command-line args and restore after test.
+	oldArgs := os.Args
+	defer func() {
+		os.Args = oldArgs
+		// Reset flag package state for subsequent tests
+		flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	}()
+
+	// Test with no flags (default behavior)
+	os.Args = []string{"cmd"}
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	contribs := flag.Bool("contribs", false, "Use GitHub contribution graph-style visualization")
+	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
+		t.Fatalf("failed to parse flags: %v", err)
+	}
+	if *contribs {
+		t.Fatalf("expected contribs to be false by default")
+	}
+
+	// Test with --contribs flag
+	os.Args = []string{"cmd", "--contribs"}
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	contribs = flag.Bool("contribs", false, "Use GitHub contribution graph-style visualization")
+	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
+		t.Fatalf("failed to parse --contribs: %v", err)
+	}
+	if !*contribs {
+		t.Fatalf("expected contribs to be true with --contribs flag")
+	}
+
+	// Test with -contribs flag
+	os.Args = []string{"cmd", "-contribs"}
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	contribs = flag.Bool("contribs", false, "Use GitHub contribution graph-style visualization")
+	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
+		t.Fatalf("failed to parse -contribs: %v", err)
+	}
+	if !*contribs {
+		t.Fatalf("expected contribs to be true with -contribs flag")
 	}
 }
 
