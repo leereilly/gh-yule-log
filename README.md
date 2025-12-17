@@ -1,8 +1,6 @@
 # GitHub Yule Log
 
-<div align="center">
-  <img src="screencap.gif" alt="Yule Log GIF" width="60%"/>
-</div>
+![Yule Log GIF](screencap.gif)
 
 A [GitHub CLI](https://cli.github.com/) extension that turns your terminal into a festive, animated Yule log :fire:
 
