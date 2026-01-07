@@ -37,7 +37,9 @@ gh yule-log
 
 ![](images/gh-yule-log-vanilla.gif)
 
-Or try the experimental `--contribs` flag to see a Yule log themed around your GitHub contributions:
+And thanks to [@shplok](https://github.com/shplok) via [#7](https://github.com/leereilly/gh-yule-log/pull/7) you can now press <kbd>↑</kbd> or <kbd>↓</kbd> to adjust flame intensity.
+
+Try the experimental `--contribs` flag to see a Yule log themed around your GitHub contributions:
 
 ```bash
 gh yule-log --contribs
