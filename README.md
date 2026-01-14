@@ -1,55 +1,94 @@
-# GitHub Yule Log
+# Tmux Yule Log
+
+> Forked from [leereilly/gh-yule-log](https://github.com/leereilly/gh-yule-log)
 
 ![Yule Log GIF](screencap.gif)
 
-A [GitHub CLI](https://cli.github.com/) extension that turns your terminal into a festive, animated Yule log :fire:
-
-Enjoy your Git logs over toasted marshmallows and your favorite beverage :beers:
-
-Vibe-coded with GitHub Copilot Agent and GPT-5.1 the week before Christmas 2025.
+A tmux screensaver plugin that turns your terminal into a festive, animated Yule log. Displays scrolling git commits from your current repository over the fire animation.
 
 ## Requirements
 
-- `gh` (GitHub CLI) installed and configured
+- tmux 3.2+ (for popup support)
+- Go 1.18+ (for building from source)
 - A modern terminal that supports ANSI colors
 
 ## Installation
 
+### Using TPM (recommended)
+
+Add to your `~/.tmux.conf`:
+
 ```bash
-gh extension install leereilly/gh-yule-log
+set -g @plugin 'gfanton/tmux-yule-log'
 ```
 
-For local development:
+Then press `prefix + I` to install.
+
+### Manual Installation
 
 ```bash
-git clone leereilly/gh-yule-log
-cd gh-yule-log
-gh extension install .
+git clone https://github.com/gfanton/tmux-yule-log
+cd tmux-yule-log
+go build -o bin/yule-log ./cmd/yule-log
+go build -o bin/yule-log-idle ./cmd/yule-log-idle
+```
+
+Then source the plugin in your `~/.tmux.conf`:
+
+```bash
+run-shell /path/to/tmux-yule-log/yule-log.tmux
 ```
 
 ## Usage
 
-Run the extension with:
+Press `prefix + Y` to trigger the screensaver manually.
+
+The screensaver displays full-screen, covering all panes and windows. Press any key to exit and return to your previous view.
+
+### Controls
+
+- <kbd>↑</kbd> Increase flame intensity
+- <kbd>↓</kbd> Decrease flame intensity
+- Any other key: Exit
+
+### Command-Line Options
+
+| Flag | Description |
+|------|-------------|
+| `--contribs` | Use GitHub contribution graph-style green visualization |
+| `--dir PATH` | Git directory for commit ticker (default: current pane path) |
+| `--no-ticker` | Disable git commit ticker (fire animation only) |
+
+### tmux Configuration
+
+Add to your `~/.tmux.conf`:
 
 ```bash
-gh yule-log
+# Idle timeout in seconds before screensaver activates (default: 300, 0=disabled)
+set -g @yule-log-idle-time "300"
+
+# Visualization mode: "fire" or "contribs" (default: fire)
+set -g @yule-log-mode "fire"
+
+# Show git commit ticker: "on" or "off" (default: on)
+set -g @yule-log-show-ticker "on"
 ```
+
+## Screenshots
+
+### Fire Mode (default)
 
 ![](images/gh-yule-log-vanilla.gif)
 
-And thanks to [@shplok](https://github.com/shplok) via [#7](https://github.com/leereilly/gh-yule-log/pull/7) you can now press <kbd>↑</kbd> or <kbd>↓</kbd> to adjust flame intensity.
-
-Try the experimental `--contribs` flag to see a Yule log themed around your GitHub contributions:
-
-```bash
-gh yule-log --contribs
-```
+### Contribution Mode (`--contribs`)
 
 ![](images/gh-yule-log-contribs.gif)
- 
-## Inspiration
 
-I was surfing Netflix the other night and was astonished at how many [branded Yule logs there were](https://youtu.be/ytMdeo9Re1k?si=Fowy4F-40MmdwMcp). I figured GitHub should get in on that action! Also inspired by [@msimpson's curses-based ASCII art fire art from back in the day](https://gist.github.com/msimpson/1096950).
+## Credits
+
+- Original project by [@leereilly](https://github.com/leereilly): [gh-yule-log](https://github.com/leereilly/gh-yule-log)
+- Flame intensity controls by [@shplok](https://github.com/shplok) via [#7](https://github.com/leereilly/gh-yule-log/pull/7)
+- Fire algorithm inspired by [@msimpson's curses-based ASCII art fire](https://gist.github.com/msimpson/1096950)
 
 ## License
 

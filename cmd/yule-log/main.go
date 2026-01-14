@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"log"
+	"fmt"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -57,14 +57,18 @@ func padRight(s string, n int) string {
 }
 
 // buildGitTickerText runs git log and returns the scrolling texts.
-func buildGitTickerText(maxCommits int) (string, string, bool) {
+// If gitDir is non-empty, it's used as the working directory; otherwise
+// YULE_LOG_GIT_DIR env var or current directory is used.
+func buildGitTickerText(maxCommits int, gitDir string) (string, string, bool) {
 	args := []string{
 		"log",
 		"-n", strconv.Itoa(maxCommits),
 		"--pretty=format:%h%x09%an%x09%ar%x09%s",
 	}
 	cmd := exec.Command("git", args...)
-	if dir := os.Getenv("YULE_LOG_GIT_DIR"); dir != "" {
+	if gitDir != "" {
+		cmd.Dir = gitDir
+	} else if dir := os.Getenv("YULE_LOG_GIT_DIR"); dir != "" {
 		cmd.Dir = dir
 	}
 	out, err := cmd.Output()
@@ -77,16 +81,18 @@ func buildGitTickerText(maxCommits int) (string, string, bool) {
 func main() {
 	// Parse command-line flags.
 	contribs := flag.Bool("contribs", false, "Use GitHub contribution graph-style visualization")
+	gitDir := flag.String("dir", "", "Git directory for commit ticker (defaults to current dir or YULE_LOG_GIT_DIR)")
+	noTicker := flag.Bool("no-ticker", false, "Disable git commit ticker (fire animation only)")
 	flag.Parse()
-
-	rand.Seed(time.Now().UnixNano())
 
 	s, err := tcell.NewScreen()
 	if err != nil {
-		log.Fatalf("creating screen: %v", err)
+		fmt.Fprintf(os.Stderr, "creating screen: %v\n", err)
+		os.Exit(1)
 	}
 	if err := s.Init(); err != nil {
-		log.Fatalf("initializing screen: %v", err)
+		fmt.Fprintf(os.Stderr, "initializing screen: %v\n", err)
+		os.Exit(1)
 	}
 	defer s.Fini()
 
@@ -129,21 +135,29 @@ func main() {
 		}
 	}
 
-	msgText, metaText, haveTicker := buildGitTickerText(20)
+	var msgText, metaText string
+	var haveTicker bool
 	msgRow := height - 2
 	metaRow := height - 1
 	tickerOffset := 0
 	frame := 0
 	events := make(chan tcell.Event, 10)
-	heatPower := 65
-	heatSources := width / 9
-	// clamp heat values to reasonable ranges.
+	// Fire simulation constants.
 	const (
-		minHeat = 10
-		maxHeat = 85
-		minSources = 1
+		maxTickerCommits  = 20 // number of git commits to show in ticker
+		defaultHeatPower  = 75 // initial flame intensity
+		heatSourceDivisor = 6  // width / this = number of heat injection points
+		minHeat           = 10
+		maxHeat           = 85
+		minSources        = 1
 	)
+	heatPower := defaultHeatPower
+	heatSources := width / heatSourceDivisor
+	if !*noTicker {
+		msgText, metaText, haveTicker = buildGitTickerText(maxTickerCommits, *gitDir)
+	}
 
+	// Event polling goroutine: terminates when s.Fini() causes PollEvent to return nil.
 	go func() {
 		for {
 			ev := s.PollEvent()
@@ -194,7 +208,7 @@ loop:
 				buffer = make([]int, size+width+1)
 				msgRow = height - 2
 				metaRow = height - 1
-				heatSources = width / 9
+				heatSources = width / heatSourceDivisor
 			}
 		default:
 		}

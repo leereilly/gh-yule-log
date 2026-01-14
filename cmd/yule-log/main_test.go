@@ -57,7 +57,7 @@ func TestFlagParsing(t *testing.T) {
 	defer func() {
 		os.Args = oldArgs
 		// Reset flag package state for subsequent tests
-		flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+		flag.CommandLine = flag.NewFlagSet(oldArgs[0], flag.ExitOnError)
 	}()
 
 	// Test with no flags (default behavior)
@@ -91,6 +91,36 @@ func TestFlagParsing(t *testing.T) {
 	}
 	if !*contribs {
 		t.Fatalf("expected contribs to be true with -contribs flag")
+	}
+}
+
+func TestNewFlags(t *testing.T) {
+	oldArgs := os.Args
+	defer func() {
+		os.Args = oldArgs
+		flag.CommandLine = flag.NewFlagSet(oldArgs[0], flag.ExitOnError)
+	}()
+
+	// Test --dir flag
+	os.Args = []string{"cmd", "--dir", "/some/path"}
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	gitDir := flag.String("dir", "", "Git directory")
+	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
+		t.Fatalf("failed to parse --dir: %v", err)
+	}
+	if *gitDir != "/some/path" {
+		t.Fatalf("expected gitDir to be /some/path, got %q", *gitDir)
+	}
+
+	// Test --no-ticker flag
+	os.Args = []string{"cmd", "--no-ticker"}
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	noTicker := flag.Bool("no-ticker", false, "Disable ticker")
+	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
+		t.Fatalf("failed to parse --no-ticker: %v", err)
+	}
+	if !*noTicker {
+		t.Fatalf("expected noTicker to be true with --no-ticker flag")
 	}
 }
 
