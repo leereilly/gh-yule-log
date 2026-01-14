@@ -93,7 +93,7 @@ build_screensaver_cmd() {
     fi
 
     # Add current pane path for git context
-    cmd="$cmd --dir '#{pane_current_path}'"
+    cmd="$cmd --dir \"#{pane_current_path}\""
 
     echo "$cmd"
 }
@@ -191,11 +191,11 @@ setup_key_bindings() {
 
     # Command aliases (use with prefix + : then type the command)
     # Example: prefix + : then "yule-log" or "yule-stop"
-    tmux set -s command-alias[100] yule-log="display-popup -E -w 100% -h 100% '$cmd'"
-    tmux set -s command-alias[101] yule-start="run-shell '$CURRENT_DIR/yule-log.tmux start'"
-    tmux set -s command-alias[102] yule-stop="run-shell '$CURRENT_DIR/yule-log.tmux stop'"
-    tmux set -s command-alias[103] yule-toggle="run-shell '$CURRENT_DIR/yule-log.tmux toggle'"
-    tmux set -s command-alias[104] yule-status="run-shell '$CURRENT_DIR/yule-log.tmux status'"
+    tmux set -s command-alias[100] "yule-log=display-popup -E -w 100% -h 100% \"$cmd\""
+    tmux set -s command-alias[101] "yule-start=run-shell \"$CURRENT_DIR/yule-log.tmux start\""
+    tmux set -s command-alias[102] "yule-stop=run-shell \"$CURRENT_DIR/yule-log.tmux stop\""
+    tmux set -s command-alias[103] "yule-toggle=run-shell \"$CURRENT_DIR/yule-log.tmux toggle\""
+    tmux set -s command-alias[104] "yule-status=run-shell \"$CURRENT_DIR/yule-log.tmux status\""
 }
 
 # Setup hook to clean up when tmux server exits
