@@ -8,7 +8,7 @@ A tmux screensaver plugin that turns your terminal into a festive, animated Yule
 
 ## Requirements
 
-- tmux 3.2+ (for popup support)
+- tmux 3.2+ (for popup and command-alias support)
 - Go 1.18+ (for building from source)
 - A modern terminal that supports ANSI colors
 
@@ -20,6 +20,9 @@ Add to your `~/.tmux.conf`:
 
 ```bash
 set -g @plugin 'gfanton/tmux-yule-log'
+
+# Optional: auto-start screensaver after 5 minutes of inactivity
+set -g @yule-log-idle-time "300"
 ```
 
 Then press `prefix + I` to install.
@@ -41,38 +44,59 @@ run-shell /path/to/tmux-yule-log/yule-log.tmux
 
 ## Usage
 
-Press `prefix + Y` to trigger the screensaver manually.
+### Key Bindings
+
+| Key | Action |
+|-----|--------|
+| `prefix + Y` | Trigger screensaver |
+| `prefix + Alt+Y` | Toggle idle watcher on/off |
+
+### tmux Commands
+
+Press `prefix + :` then type any of these commands (tab-completion works):
+
+| Command | Action |
+|---------|--------|
+| `:yule-log` | Trigger screensaver |
+| `:yule-start` | Start idle watcher |
+| `:yule-stop` | Stop idle watcher |
+| `:yule-toggle` | Toggle idle watcher on/off |
+| `:yule-status` | Check if idle watcher is running |
+
+### Screensaver Controls
+
+| Key | Action |
+|-----|--------|
+| <kbd>↑</kbd> | Increase flame intensity |
+| <kbd>↓</kbd> | Decrease flame intensity |
+| Any other key | Exit screensaver |
 
 The screensaver displays full-screen, covering all panes and windows. Press any key to exit and return to your previous view.
 
-### Controls
+## Configuration
 
-- <kbd>↑</kbd> Increase flame intensity
-- <kbd>↓</kbd> Decrease flame intensity
-- Any other key: Exit
+Add to your `~/.tmux.conf`:
+
+```bash
+# Idle timeout in seconds before screensaver activates (0 = disabled)
+set -g @yule-log-idle-time "300"
+
+# Visualization mode: "fire" or "contribs"
+set -g @yule-log-mode "fire"
+
+# Show git commit ticker: "on" or "off"
+set -g @yule-log-show-ticker "on"
+```
 
 ### Command-Line Options
+
+When running the binary directly:
 
 | Flag | Description |
 |------|-------------|
 | `--contribs` | Use GitHub contribution graph-style green visualization |
 | `--dir PATH` | Git directory for commit ticker (default: current pane path) |
 | `--no-ticker` | Disable git commit ticker (fire animation only) |
-
-### tmux Configuration
-
-Add to your `~/.tmux.conf`:
-
-```bash
-# Idle timeout in seconds before screensaver activates (default: 300, 0=disabled)
-set -g @yule-log-idle-time "300"
-
-# Visualization mode: "fire" or "contribs" (default: fire)
-set -g @yule-log-mode "fire"
-
-# Show git commit ticker: "on" or "off" (default: on)
-set -g @yule-log-show-ticker "on"
-```
 
 ## Screenshots
 
