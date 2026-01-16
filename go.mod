@@ -2,7 +2,10 @@ module yule-log
 
 go 1.21
 
-require github.com/gdamore/tcell/v2 v2.7.4
+require (
+	github.com/gdamore/tcell/v2 v2.7.4
+	github.com/peterbourgon/ff/v3 v3.4.0
+)
 
 require (
 	github.com/gdamore/encoding v1.0.0 // indirect

@@ -1,84 +1,95 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"math/rand"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/peterbourgon/ff/v3/ffcli"
 )
 
-// Usage:
-//   yule-log [flags]           # default: run screensaver (backwards compatible)
-//   yule-log run [flags]       # explicit: run screensaver
-//   yule-log idle [flags]      # run idle watcher daemon
-
 func main() {
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "idle":
-			runIdle(os.Args[2:])
-			return
-		case "run":
-			runScreensaver(os.Args[2:])
-			return
-		case "-h", "--help", "help":
-			printUsage()
-			return
-		}
+	// Root flags (none currently, but available for future)
+	rootFlagSet := flag.NewFlagSet("yule-log", flag.ExitOnError)
+
+	// Run command flags
+	runFlagSet := flag.NewFlagSet("yule-log run", flag.ExitOnError)
+	runContribs := runFlagSet.Bool("contribs", false, "Use GitHub contribution graph-style visualization")
+	runGitDir := runFlagSet.String("dir", "", "Git directory for commit ticker (defaults to current dir or YULE_LOG_GIT_DIR)")
+	runNoTicker := runFlagSet.Bool("no-ticker", false, "Disable git commit ticker (fire animation only)")
+
+	// Idle command flags
+	idleFlagSet := flag.NewFlagSet("yule-log idle", flag.ExitOnError)
+	idleTimeout := idleFlagSet.Int("timeout", defaultIdleTimeout, "Idle timeout in seconds before triggering screensaver")
+	idleOnce := idleFlagSet.Bool("once", false, "Trigger screensaver immediately and exit")
+	idleContribs := idleFlagSet.Bool("contribs", false, "Use GitHub contribution graph-style visualization")
+	idleNoTicker := idleFlagSet.Bool("no-ticker", false, "Disable git commit ticker")
+
+	// Run subcommand
+	runCmd := &ffcli.Command{
+		Name:       "run",
+		ShortUsage: "yule-log run [flags]",
+		ShortHelp:  "Run the screensaver",
+		FlagSet:    runFlagSet,
+		Exec: func(ctx context.Context, args []string) error {
+			return execScreensaver(*runContribs, *runGitDir, *runNoTicker)
+		},
 	}
-	// Default: run screensaver (for backwards compatibility)
-	runScreensaver(os.Args[1:])
-}
 
-func printUsage() {
-	fmt.Println(`Yule Log - A tmux screensaver with fire animation and git commit ticker
+	// Idle subcommand
+	idleCmd := &ffcli.Command{
+		Name:       "idle",
+		ShortUsage: "yule-log idle [flags]",
+		ShortHelp:  "Run idle watcher daemon",
+		FlagSet:    idleFlagSet,
+		Exec: func(ctx context.Context, args []string) error {
+			return execIdle(*idleTimeout, *idleOnce, *idleContribs, *idleNoTicker)
+		},
+	}
 
-Usage:
-  yule-log [flags]         Run screensaver (default)
-  yule-log run [flags]     Run screensaver explicitly
-  yule-log idle [flags]    Run idle watcher daemon
+	// Root command - defaults to running screensaver (backwards compatible)
+	rootCmd := &ffcli.Command{
+		ShortUsage:  "yule-log [flags] <subcommand>",
+		ShortHelp:   "A tmux screensaver with fire animation and git commit ticker",
+		LongHelp:    "Controls:\n  Arrow Up/Down   Adjust flame intensity\n  Any other key   Exit screensaver",
+		FlagSet:     rootFlagSet,
+		Subcommands: []*ffcli.Command{runCmd, idleCmd},
+		Exec: func(ctx context.Context, args []string) error {
+			// Default behavior: run screensaver (backwards compatible)
+			return execScreensaver(false, "", false)
+		},
+	}
 
-Screensaver flags:
-  --contribs      Use GitHub contribution graph-style visualization
-  --dir <path>    Git directory for commit ticker (defaults to current dir or YULE_LOG_GIT_DIR)
-  --no-ticker     Disable git commit ticker (fire animation only)
-
-Idle watcher flags:
-  --timeout <sec> Idle timeout in seconds before triggering screensaver (default: 300)
-  --once          Trigger screensaver immediately and exit
-  --contribs      Use GitHub contribution graph-style visualization
-  --no-ticker     Disable git commit ticker
-
-Controls:
-  Arrow Up/Down   Adjust flame intensity
-  Any other key   Exit screensaver`)
+	if err := rootCmd.ParseAndRun(context.Background(), os.Args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			os.Exit(0)
+		}
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 // ============================================================================
 // Screensaver (run) command
 // ============================================================================
 
-func runScreensaver(args []string) {
-	fs := flag.NewFlagSet("run", flag.ExitOnError)
-	contribs := fs.Bool("contribs", false, "Use GitHub contribution graph-style visualization")
-	gitDir := fs.String("dir", "", "Git directory for commit ticker (defaults to current dir or YULE_LOG_GIT_DIR)")
-	noTicker := fs.Bool("no-ticker", false, "Disable git commit ticker (fire animation only)")
-	fs.Parse(args)
-
+func execScreensaver(contribs bool, gitDir string, noTicker bool) error {
 	s, err := tcell.NewScreen()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "creating screen: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("creating screen: %w", err)
 	}
 	if err := s.Init(); err != nil {
-		fmt.Fprintf(os.Stderr, "initializing screen: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("initializing screen: %w", err)
 	}
 	defer s.Fini()
 
@@ -87,7 +98,7 @@ func runScreensaver(args []string) {
 
 	width, height := s.Size()
 	if width <= 0 || height <= 0 {
-		return
+		return nil
 	}
 
 	size := width * height
@@ -96,7 +107,7 @@ func runScreensaver(args []string) {
 	var chars []rune
 	var styles []tcell.Style
 
-	if *contribs {
+	if contribs {
 		// GitHub contribution graph-style glyphs and colors.
 		chars = []rune{' ', '⬝', '⬝', '⯀', '⯀', '◼', '◼', '■', '■', '■'}
 		styles = []tcell.Style{
@@ -136,8 +147,8 @@ func runScreensaver(args []string) {
 	)
 	heatPower := defaultHeatPower
 	heatSources := width / heatSourceDivisor
-	if !*noTicker {
-		msgText, metaText, haveTicker = buildGitTickerText(maxTickerCommits, *gitDir)
+	if !noTicker {
+		msgText, metaText, haveTicker = buildGitTickerText(maxTickerCommits, gitDir)
 	}
 
 	go func() {
@@ -260,6 +271,8 @@ loop:
 		time.Sleep(frameDelay)
 		frame++
 	}
+
+	return nil
 }
 
 // ============================================================================
@@ -271,52 +284,67 @@ const (
 	pollInterval       = 5
 )
 
-func runIdle(args []string) {
-	fs := flag.NewFlagSet("idle", flag.ExitOnError)
-	timeout := fs.Int("timeout", defaultIdleTimeout, "Idle timeout in seconds before triggering screensaver")
-	once := fs.Bool("once", false, "Trigger screensaver immediately and exit (for manual trigger)")
-	contribs := fs.Bool("contribs", false, "Use GitHub contribution graph-style visualization")
-	noTicker := fs.Bool("no-ticker", false, "Disable git commit ticker")
-	fs.Parse(args)
-
+func execIdle(timeout int, once, contribs, noTicker bool) error {
 	// Find our own executable path to call "yule-log run"
 	exePath, err := os.Executable()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "finding executable path: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("finding executable path: %w", err)
 	}
 
-	if *once {
-		triggerScreensaver(exePath, *contribs, *noTicker)
-		return
+	if once {
+		triggerScreensaver(context.Background(), exePath, contribs, noTicker)
+		return nil
 	}
 
 	if os.Getenv("TMUX") == "" {
-		fmt.Fprintf(os.Stderr, "not running inside tmux\n")
-		os.Exit(1)
+		return fmt.Errorf("not running inside tmux")
 	}
 
-	fmt.Printf("Yule log idle watcher started (timeout: %ds)\n", *timeout)
+	// Create context that cancels on SIGINT or SIGTERM for graceful shutdown
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	fmt.Printf("Yule log idle watcher started (timeout: %ds, poll: %ds)\n", timeout, pollInterval)
+
+	// Use a ticker for controlled polling instead of sleep
+	ticker := time.NewTicker(time.Duration(pollInterval) * time.Second)
+	defer ticker.Stop()
+
+	// Track whether we're waiting for user activity after triggering.
+	// This prevents immediate re-triggering when exiting the screensaver,
+	// since tmux popup interactions don't update #{client_activity}.
+	waitingForActivity := false
+
 	for {
-		idleSeconds, err := getClientIdleTime()
-		if err != nil {
-			time.Sleep(time.Duration(pollInterval) * time.Second)
-			continue
-		}
+		select {
+		case <-ctx.Done():
+			fmt.Println("Yule log idle watcher stopped")
+			return nil
+		case <-ticker.C:
+			idleSeconds, err := getClientIdleTime(ctx)
+			if err != nil {
+				continue
+			}
 
-		if idleSeconds >= *timeout {
-			triggerScreensaver(exePath, *contribs, *noTicker)
+			if waitingForActivity {
+				// After triggering, wait for user to become active again
+				// before allowing another trigger
+				if idleSeconds < timeout {
+					waitingForActivity = false
+				}
+			} else if idleSeconds >= timeout {
+				triggerScreensaver(ctx, exePath, contribs, noTicker)
+				waitingForActivity = true
+			}
 		}
-
-		time.Sleep(time.Duration(pollInterval) * time.Second)
 	}
 }
 
-func getClientIdleTime() (int, error) {
-	cmd := exec.Command("tmux", "display-message", "-p", "#{client_activity}")
+func getClientIdleTime(ctx context.Context) (int, error) {
+	cmd := exec.CommandContext(ctx, "tmux", "display-message", "-p", "#{client_activity}")
 	out, err := cmd.Output()
 	if err != nil {
-		return 0, fmt.Errorf("failed to get client activity: %w", err)
+		return 0, fmt.Errorf("get client activity: %w", err)
 	}
 
 	activityStr := strings.TrimSpace(string(out))
@@ -326,19 +354,15 @@ func getClientIdleTime() (int, error) {
 
 	activityTime, err := strconv.ParseInt(activityStr, 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse activity timestamp: %w", err)
+		return 0, fmt.Errorf("parse activity timestamp: %w", err)
 	}
 
 	now := time.Now().Unix()
-	idle := int(now - activityTime)
-	if idle < 0 {
-		idle = 0
-	}
-
+	idle := max(int(now-activityTime), 0)
 	return idle, nil
 }
 
-func triggerScreensaver(exePath string, contribs, noTicker bool) {
+func triggerScreensaver(ctx context.Context, exePath string, contribs, noTicker bool) {
 	// Build command: "yule-log run [flags]"
 	args := []string{exePath, "run"}
 	if contribs {
@@ -349,7 +373,7 @@ func triggerScreensaver(exePath string, contribs, noTicker bool) {
 	}
 
 	// Get the current pane's path for git context
-	panePathCmd := exec.Command("tmux", "display-message", "-p", "#{pane_current_path}")
+	panePathCmd := exec.CommandContext(ctx, "tmux", "display-message", "-p", "#{pane_current_path}")
 	panePathOut, _ := panePathCmd.Output()
 	panePath := strings.TrimSpace(string(panePathOut))
 
@@ -367,6 +391,9 @@ func triggerScreensaver(exePath string, contribs, noTicker bool) {
 		cmdStr,
 	}
 
+	// Note: We don't use CommandContext here because the popup is interactive
+	// and should not be killed when the watcher receives a signal - the user
+	// should be able to exit it naturally
 	cmd := exec.Command("tmux", popupArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
