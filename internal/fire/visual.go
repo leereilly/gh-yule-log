@@ -3,8 +3,8 @@ package fire
 // ---- Visual Feedback Parameters
 
 const (
-	// BaseHeatPower is the resting fire intensity (lower than normal screensaver).
-	BaseHeatPower = 50
+	// BaseHeatPower is the resting fire intensity.
+	BaseHeatPower = 75
 
 	// BurstHeat is the heat added per keypress.
 	BurstHeat = 12

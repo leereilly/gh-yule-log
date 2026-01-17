@@ -51,24 +51,33 @@ check_tmux_version() {
     return 0
 }
 
-# Build Go binary if needed
-build_binaries() {
+# Find or build yule-log binary
+get_binary() {
     local bin_dir="$CURRENT_DIR/bin"
-    mkdir -p "$bin_dir"
 
-    # Check if Go is available
-    if ! command -v go >/dev/null 2>&1; then
-        echo "Warning: Go not found. Pre-built binaries required."
-        return 1
+    # Check PATH first (for nix/go install users)
+    if command -v yule-log >/dev/null 2>&1; then
+        command -v yule-log
+        return 0
     fi
 
-    # Build yule-log if not present
-    if [ ! -x "$bin_dir/yule-log" ]; then
-        echo "Building yule-log..."
-        (cd "$CURRENT_DIR" && go build -o "$bin_dir/yule-log" .) || return 1
+    # Check local bin/
+    if [ -x "$bin_dir/yule-log" ]; then
+        echo "$bin_dir/yule-log"
+        return 0
     fi
 
-    return 0
+    # Try to build if Go is available
+    if command -v go >/dev/null 2>&1; then
+        mkdir -p "$bin_dir"
+        echo "Building yule-log..." >&2
+        if (cd "$CURRENT_DIR" && go build -o "$bin_dir/yule-log" .); then
+            echo "$bin_dir/yule-log"
+            return 0
+        fi
+    fi
+
+    return 1
 }
 
 # Get plugin options from tmux
@@ -98,7 +107,7 @@ get_lock_socket_protect() {
 
 # Build screensaver command with options
 build_screensaver_cmd() {
-    local cmd="$CURRENT_DIR/bin/yule-log"
+    local cmd="$YULE_LOG_BIN run"
 
     if [ "$(get_mode)" = "contribs" ]; then
         cmd="$cmd --contribs"
@@ -109,14 +118,14 @@ build_screensaver_cmd() {
     fi
 
     # Add current pane path for git context
-    cmd="$cmd --dir \"#{pane_current_path}\""
+    cmd="$cmd --dir '#{pane_current_path}'"
 
     echo "$cmd"
 }
 
 # Build lock command with options
 build_lock_cmd() {
-    local cmd="$CURRENT_DIR/bin/yule-log lock"
+    local cmd="$YULE_LOG_BIN lock"
 
     if [ "$(get_mode)" = "contribs" ]; then
         cmd="$cmd --contribs"
@@ -135,7 +144,7 @@ build_lock_cmd() {
 
 # Check if password is configured
 is_password_configured() {
-    "$CURRENT_DIR/bin/yule-log" lock status 2>&1 | grep -q "Password: configured"
+    "$YULE_LOG_BIN" lock status 2>&1 | grep -q "Password: configured"
 }
 
 # Lock the session
@@ -146,7 +155,7 @@ lock_session() {
     fi
 
     if ! is_password_configured; then
-        tmux display-message "No password configured. Run: $CURRENT_DIR/bin/yule-log lock set-password"
+        tmux display-message "No password configured. Run: $YULE_LOG_BIN lock set-password"
         return 1
     fi
 
@@ -206,7 +215,7 @@ start_idle_watcher() {
     fi
 
     # Build idle watcher command
-    local idle_cmd="$CURRENT_DIR/bin/yule-log idle --timeout $idle_time"
+    local idle_cmd="$YULE_LOG_BIN idle --timeout $idle_time"
 
     if [ "$(get_mode)" = "contribs" ]; then
         idle_cmd="$idle_cmd --contribs"
@@ -262,7 +271,7 @@ setup_key_bindings() {
     tmux set -s command-alias[103] "yule-toggle=run-shell \"$CURRENT_DIR/yule-log.tmux toggle\""
     tmux set -s command-alias[104] "yule-status=run-shell \"$CURRENT_DIR/yule-log.tmux status\""
     tmux set -s command-alias[105] "yule-lock=run-shell \"$CURRENT_DIR/yule-log.tmux lock\""
-    tmux set -s command-alias[106] "yule-set-password=run-shell \"$CURRENT_DIR/bin/yule-log lock set-password\""
+    tmux set -s command-alias[106] "yule-set-password=run-shell \"$YULE_LOG_BIN lock set-password\""
 }
 
 # Setup hook to clean up when tmux server exits
@@ -275,9 +284,18 @@ setup_cleanup_hook() {
 }
 
 main() {
+    # Find yule-log binary (needed for most commands)
+    # This is non-fatal for stop/status commands
+    YULE_LOG_BIN=$(get_binary) || true
+    export YULE_LOG_BIN
+
     # Handle command-line arguments for start/stop/toggle/status/lock
     case "${1:-}" in
         start)
+            if [ -z "$YULE_LOG_BIN" ]; then
+                tmux display-message "yule-log binary not found. Install via: go install or nix"
+                return 1
+            fi
             start_idle_watcher
             return
             ;;
@@ -286,6 +304,10 @@ main() {
             return
             ;;
         toggle)
+            if [ -z "$YULE_LOG_BIN" ]; then
+                tmux display-message "yule-log binary not found. Install via: go install or nix"
+                return 1
+            fi
             toggle_idle_watcher
             return
             ;;
@@ -300,6 +322,10 @@ main() {
             return
             ;;
         lock)
+            if [ -z "$YULE_LOG_BIN" ]; then
+                tmux display-message "yule-log binary not found. Install via: go install or nix"
+                return 1
+            fi
             lock_session
             return
             ;;
@@ -310,8 +336,10 @@ main() {
         return 1
     fi
 
-    if ! build_binaries; then
-        echo "Warning: Could not build yule-log binaries"
+    # Verify binary is found for plugin initialization
+    if [ -z "$YULE_LOG_BIN" ]; then
+        tmux display-message "yule-log binary not found. Install via: go install github.com/gfanton/tmux-yule-log@latest or nix profile install github:gfanton/tmux-yule-log#yule-log"
+        return 1
     fi
 
     # Setup key bindings

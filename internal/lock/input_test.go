@@ -154,3 +154,45 @@ func TestSecureBuffer_Backspace(t *testing.T) {
 		assert.Equal(t, 0, sb.Len(), "after 3rd backspace")
 	})
 }
+
+func TestSecureBuffer_VisualLen(t *testing.T) {
+	t.Run("empty buffer", func(t *testing.T) {
+		sb := NewSecureBuffer()
+		assert.Equal(t, 0, sb.VisualLen())
+	})
+
+	t.Run("regular chars only", func(t *testing.T) {
+		sb := NewSecureBuffer()
+		sb.AppendRune('a')
+		sb.AppendRune('b')
+		sb.AppendRune('c')
+		assert.Equal(t, 3, sb.VisualLen())
+	})
+
+	t.Run("arrows count as one each", func(t *testing.T) {
+		sb := NewSecureBuffer()
+		sb.AppendString(ArrowUpMarker)
+		sb.AppendString(ArrowDownMarker)
+		assert.Equal(t, 2, sb.VisualLen())
+	})
+
+	t.Run("mixed chars and arrows", func(t *testing.T) {
+		sb := NewSecureBuffer()
+		sb.AppendRune('a')
+		sb.AppendString(ArrowUpMarker)
+		sb.AppendRune('b')
+		sb.AppendString(ArrowLeftMarker)
+		sb.AppendString(ArrowRightMarker)
+		// 'a' + arrow + 'b' + arrow + arrow = 5 visual chars
+		assert.Equal(t, 5, sb.VisualLen())
+	})
+
+	t.Run("all arrow types", func(t *testing.T) {
+		sb := NewSecureBuffer()
+		sb.AppendString(ArrowUpMarker)
+		sb.AppendString(ArrowDownMarker)
+		sb.AppendString(ArrowLeftMarker)
+		sb.AppendString(ArrowRightMarker)
+		assert.Equal(t, 4, sb.VisualLen())
+	})
+}

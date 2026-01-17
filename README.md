@@ -9,7 +9,7 @@ A tmux screensaver plugin that turns your terminal into a festive, animated Yule
 ## Requirements
 
 - tmux 3.2+ (for popup and command-alias support)
-- Go 1.18+ (for building from source)
+- Go 1.24+ (for building from source, or use nix/pre-built binary)
 - A modern terminal that supports ANSI colors
 
 ## Installation
@@ -25,21 +25,28 @@ set -g @plugin 'gfanton/tmux-yule-log'
 set -g @yule-log-idle-time "300"
 ```
 
-Then press `prefix + I` to install.
+Then press `prefix + I` to install. The binary will be built automatically if Go is available.
+
+### Using Nix
+
+```bash
+# Install full tmux plugin (includes binary)
+nix profile install github:gfanton/tmux-yule-log
+
+# Or just the binary
+nix profile install github:gfanton/tmux-yule-log#yule-log
+```
 
 ### Manual Installation
 
 ```bash
-git clone https://github.com/gfanton/tmux-yule-log
-cd tmux-yule-log
-go build -o bin/yule-log ./cmd/yule-log
-go build -o bin/yule-log-idle ./cmd/yule-log-idle
+git clone https://github.com/gfanton/tmux-yule-log ~/.tmux/plugins/tmux-yule-log
 ```
 
 Then source the plugin in your `~/.tmux.conf`:
 
 ```bash
-run-shell /path/to/tmux-yule-log/yule-log.tmux
+run-shell ~/.tmux/plugins/tmux-yule-log/yule-log.tmux
 ```
 
 ## Usage

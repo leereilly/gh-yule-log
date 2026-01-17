@@ -41,6 +41,16 @@ const (
 	maxHeat           = 85
 	minSources        = 1
 
+	// Heat value thresholds for color selection
+	heatThresholdHigh   = 15
+	heatThresholdMedium = 9
+	heatThresholdLow    = 4
+	heatThresholdMin    = 1
+
+	// Color shift thresholds
+	colorShiftBaseHeat = 18
+	colorShiftMaxHeat  = 38
+
 	// Terminal input byte values
 	byteEscape         = 0x1b
 	byteCtrlC          = 0x03
@@ -62,31 +72,16 @@ const (
 // ---- Visual Themes
 
 type theme struct {
-	chars  []rune
-	styles []tcell.Style
+	chars []rune
 }
 
 var (
 	fireTheme = theme{
 		chars: []rune{' ', '.', ':', '^', '*', 'x', 's', 'S', '#', '$'},
-		styles: []tcell.Style{
-			tcell.StyleDefault.Foreground(tcell.ColorBlack),
-			tcell.StyleDefault.Foreground(tcell.ColorMaroon),
-			tcell.StyleDefault.Foreground(tcell.ColorRed),
-			tcell.StyleDefault.Foreground(tcell.ColorDarkOrange),
-			tcell.StyleDefault.Foreground(tcell.ColorYellow).Bold(true),
-		},
 	}
 
 	contribTheme = theme{
 		chars: []rune{' ', '⬝', '⬝', '⯀', '⯀', '◼', '◼', '■', '■', '■'},
-		styles: []tcell.Style{
-			tcell.StyleDefault.Foreground(tcell.ColorBlack),
-			tcell.StyleDefault.Foreground(tcell.NewRGBColor(155, 233, 168)),
-			tcell.StyleDefault.Foreground(tcell.NewRGBColor(64, 196, 99)),
-			tcell.StyleDefault.Foreground(tcell.NewRGBColor(48, 161, 78)),
-			tcell.StyleDefault.Foreground(tcell.NewRGBColor(33, 110, 57)),
-		},
 	}
 )
 
@@ -105,10 +100,6 @@ func (c screensaverConfig) theme() theme {
 		return contribTheme
 	}
 	return fireTheme
-}
-
-func (c screensaverConfig) usesVisualState() bool {
-	return c.mode == ModePlayground || c.mode == ModeLock
 }
 
 type screensaver struct {
@@ -163,10 +154,8 @@ func newScreensaver(cfg screensaverConfig) (*screensaver, error) {
 		pollDone:  make(chan struct{}),
 	}
 
-	if cfg.usesVisualState() {
-		s.visualState = fire.NewVisualStateWithPreset(cfg.cooldown)
-		s.heatPower = s.visualState.EffectiveHeatPower()
-	}
+	s.visualState = fire.NewVisualStateWithPreset(cfg.cooldown)
+	s.heatPower = s.visualState.EffectiveHeatPower()
 
 	if cfg.mode == ModeLock {
 		s.inputBuffer = lock.NewSecureBuffer()
@@ -255,14 +244,11 @@ func (s *screensaver) handleKeyNormal(ev *tcell.EventKey) action {
 	switch ev.Key() {
 	case tcell.KeyEscape:
 		return actionExit
-	case tcell.KeyUp:
-		s.adjustHeat(5, 1)
-	case tcell.KeyDown:
-		s.adjustHeat(-5, -1)
+	case tcell.KeyUp, tcell.KeyDown:
+		return actionNone // Fire burst handled by visualState.OnKeyPress()
 	default:
 		return actionExit
 	}
-	return actionNone
 }
 
 func (s *screensaver) handleKeyPlayground(ev *tcell.EventKey) action {
@@ -309,11 +295,6 @@ func (s *screensaver) tryUnlock() bool {
 		return false
 	}
 	return true
-}
-
-func (s *screensaver) adjustHeat(powerDelta, sourcesDelta int) {
-	s.heatPower = clamp(s.heatPower+powerDelta, minHeat, maxHeat)
-	s.heatSources = clamp(s.heatSources+sourcesDelta, minSources, s.width)
 }
 
 // ---- Rendering
@@ -464,37 +445,23 @@ var fireBaseColors = []struct{ r, g, b uint8 }{
 }
 
 func (s *screensaver) styleForValue(v int) tcell.Style {
-	// In lock mode, always use RGB-based colors for smooth transitions
-	if s.cfg.mode == ModeLock {
-		return s.lockModeStyle(v)
-	}
-
-	// Standard theme-based coloring for other modes
-	switch {
-	case v > 15:
-		return s.theme.styles[4]
-	case v > 9:
-		return s.theme.styles[3]
-	case v > 4:
-		return s.theme.styles[2]
-	default:
-		return s.theme.styles[1]
-	}
+	// Use RGB-based colors for smooth transitions in all modes
+	return s.rgbStyle(v)
 }
 
-// lockModeStyle returns RGB-based style with color derived from cell heat.
+// rgbStyle returns RGB-based style with color derived from cell heat.
 // Both height and color use the same source (cell heat v) so they correlate.
-func (s *screensaver) lockModeStyle(v int) tcell.Style {
+func (s *screensaver) rgbStyle(v int) tcell.Style {
 	// Select base color from heat value
 	var r, g, b uint8
 	switch {
-	case v > 15:
+	case v > heatThresholdHigh:
 		r, g, b = fireBaseColors[4].r, fireBaseColors[4].g, fireBaseColors[4].b
-	case v > 9:
+	case v > heatThresholdMedium:
 		r, g, b = fireBaseColors[3].r, fireBaseColors[3].g, fireBaseColors[3].b
-	case v > 4:
+	case v > heatThresholdLow:
 		r, g, b = fireBaseColors[2].r, fireBaseColors[2].g, fireBaseColors[2].b
-	case v > 1:
+	case v > heatThresholdMin:
 		r, g, b = fireBaseColors[1].r, fireBaseColors[1].g, fireBaseColors[1].b
 	default:
 		r, g, b = fireBaseColors[0].r, fireBaseColors[0].g, fireBaseColors[0].b
@@ -507,11 +474,8 @@ func (s *screensaver) lockModeStyle(v int) tcell.Style {
 		return tcell.StyleDefault.Foreground(tcell.NewRGBColor(int32(r), int32(g), int32(b)))
 	}
 
-	// Color shift based on CELL HEAT (same source as height)
-	// After heat diffusion, values are lower than heatPower
-	// Map v: 18-38 → intensity: 0-1 for color shift
-	const colorShiftBaseHeat = 18
-	const colorShiftMaxHeat = 38
+	// Color shift based on cell heat (same source as height).
+	// After heat diffusion, values are lower than heatPower.
 	if v > colorShiftBaseHeat {
 		intensity := float64(v-colorShiftBaseHeat) / float64(colorShiftMaxHeat-colorShiftBaseHeat)
 		if intensity > 1 {
@@ -576,7 +540,10 @@ func execIdle(cfg idleConfig) error {
 	}
 
 	if cfg.Once {
-		triggerScreensaver(context.Background(), exePath, cfg.Contribs, cfg.NoTicker)
+		triggerScreensaver(context.Background(), exePath, triggerConfig{
+			Contribs: cfg.Contribs,
+			NoTicker: cfg.NoTicker,
+		})
 		return nil
 	}
 
@@ -613,7 +580,10 @@ func execIdle(cfg idleConfig) error {
 			}
 
 			if idleSeconds >= cfg.Timeout {
-				triggerScreensaver(ctx, exePath, cfg.Contribs, cfg.NoTicker)
+				triggerScreensaver(ctx, exePath, triggerConfig{
+					Contribs: cfg.Contribs,
+					NoTicker: cfg.NoTicker,
+				})
 				waitingForActivity = true
 			}
 		}
@@ -671,7 +641,10 @@ func execSetPassword() error {
 
 	if lock.PasswordExists() {
 		fmt.Print("A password is already set. Replace it? [y/N]: ")
-		response, _ := reader.ReadString('\n')
+		response, err := reader.ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return fmt.Errorf("reading confirmation: %w", err)
+		}
 		response = strings.TrimSpace(strings.ToLower(response))
 		if response != "y" && response != "yes" {
 			fmt.Println("Password not changed.")
@@ -763,12 +736,17 @@ func getClientIdleTime(ctx context.Context) (int, error) {
 	return max(int(time.Now().Unix()-activityTime), 0), nil
 }
 
-func triggerScreensaver(ctx context.Context, exePath string, contribs, noTicker bool) {
+type triggerConfig struct {
+	Contribs bool
+	NoTicker bool
+}
+
+func triggerScreensaver(ctx context.Context, exePath string, cfg triggerConfig) {
 	args := []string{exePath, "run"}
-	if contribs {
+	if cfg.Contribs {
 		args = append(args, "--contribs")
 	}
-	if noTicker {
+	if cfg.NoTicker {
 		args = append(args, "--no-ticker")
 	}
 
@@ -892,7 +870,7 @@ func readPasswordWithArrows() ([]byte, error) {
 	for {
 		n, err := os.Stdin.Read(buf)
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return password, nil
 			}
 			lock.ClearBytes(password)
